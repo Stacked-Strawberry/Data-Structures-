@@ -1,0 +1,971 @@
+#include<iostream>
+#include<list>
+#include<vector>
+#include <cstdlib>  // For system("cls") and system("clear")
+#include <string>
+using namespace std;
+
+class Complaint {
+public:
+    int complaintID;
+    string complaintText;
+    int userId;
+    string userType;
+
+    Complaint(int id, string text, int uid, string uType)
+        : complaintID(id), complaintText(text), userId(uid), userType(uType) {}
+
+    int getPriorityValue() const {
+        if (userType == "platinum") return 1;
+        if (userType == "gold") return 2;
+        if (userType == "silver") return 3;
+        if (userType == "regular") return 4;
+        return 5;
+    }
+
+    bool operator<(Complaint& other)  {
+        if (getPriorityValue() != other.getPriorityValue())
+            return getPriorityValue() > other.getPriorityValue();
+        return complaintID > other.complaintID; 
+    }
+};
+
+class user {
+public:
+    int userId;
+    string name, email, country, type;
+    vector<Complaint> complaints;
+    user(int id, string n, string E, string c, string t) :userId(id), name(n), email(E), country(c), type(t) {}
+    user(user* obj) :userId(obj->userId), name(obj->name), email(obj->email), country(obj->country), type(obj->type) {}
+
+    void addComplaint(Complaint& complaint) {
+        complaints.push_back(complaint);
+    }
+};
+
+template<typename T,typename U>
+class userListANDavlTree {
+    class dllNode {
+    public:
+        user* userData;
+        dllNode* prev;
+        dllNode* next;
+
+        dllNode(user* data) : userData(data), prev(nullptr), next(nullptr) {}
+    };
+
+    class NonGroupAvlNode {
+    public:
+        NonGroupAvlNode* left, * right;
+        U userData;
+        int height;
+        dllNode* pointerTOUser;
+
+        NonGroupAvlNode(U userD) :height(0), userData(userD), pointerTOUser(nullptr), left(nullptr), right(nullptr) {}
+    };
+
+    class sllNode {
+    public:
+        int userId;
+        dllNode* pointerToUser;
+        NonGroupAvlNode* pointerToUserAVL;// created to decrease time complexity in group deletion function (logic removed)
+        sllNode* Next;
+
+        sllNode(int userId, dllNode* pointerToUser): userId(userId), pointerToUser(pointerToUser), Next(nullptr) , pointerToUserAVL(nullptr){}
+    };
+
+    class avlNode {
+    public:
+        T userData;
+        avlNode* left;
+        avlNode* right;
+        int height;
+
+        sllNode* Head;
+        sllNode* Tail;
+
+        avlNode(T data): userData(data), left(nullptr), right(nullptr), height(1), Head(nullptr), Tail(nullptr) {}
+    };
+
+    avlNode* root;
+    NonGroupAvlNode* Root;
+    dllNode* head;
+    dllNode* tail;
+    vector<Complaint> heap;
+
+    void heapifyUp(int index) {
+        while (index > 0) {
+            int parentIdx = (index - 1) / 2;
+            if (heap[index] < heap[parentIdx]) {
+                swap(heap[index], heap[parentIdx]);
+                index = parentIdx;
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    void heapifyDown(int index) {
+        int size = heap.size();
+        while (index < size) {
+            int left = 2 * index + 1;
+            int right = 2 * index + 2;
+            int smallest = index;
+
+            if (left < size && heap[left] < heap[smallest])
+                smallest = left;
+            if (right < size && heap[right] < heap[smallest])
+                smallest = right;
+
+            if (smallest != index) {
+                swap(heap[index], heap[smallest]);
+                index = smallest;
+            }
+            else {
+                break;
+            }
+        }
+    }
+public:
+    userListANDavlTree() : Root(nullptr),root(nullptr), head(nullptr), tail(nullptr) {}
+
+    void registerComplaint(int complaintID, const string& text, int userId, const string& userType) {
+        dllNode* userNode = searchUserById(userId);
+        if (userNode == nullptr) {
+            cout << "User not found." << endl;
+            return;
+        }
+        Complaint newComplaint(complaintID, text, userId, userType);
+
+        userNode->userData->addComplaint(newComplaint);
+        heap.push_back(newComplaint);
+        heapifyUp(heap.size() - 1);
+
+        cout << "Complaint registered successfully!" << endl;
+    }
+
+    void printHeap() {
+        if (heap.empty()) {
+            cout << "No complaints in the heap." << endl;
+            return;
+        }
+
+        cout << "Complaints in the Heap:\n";
+        for (const Complaint& complaint : heap) {
+            cout << "Complaint ID: " << complaint.complaintID << endl;
+            cout << "User ID: " << complaint.userId << endl;
+            cout << "User Type: " << complaint.userType << endl;
+            cout << "Complaint Text: " << complaint.complaintText << endl;
+            cout << "-------------------------------\n";
+        }
+    }
+
+
+    void registerComplaintPublic(int complaintID, const string& text, int userId) {
+        dllNode* userNode = searchUserById(userId);
+        if (userNode == nullptr) {
+            cout << "User not found." << endl;
+            return;
+        }
+        string userType = userNode->userData->type;
+        registerComplaint(complaintID, text, userId, userType);
+        cout << "Complaint registered successfully!" << endl;
+    }
+
+    void serviceComplaint() {
+        if (heap.empty()) {
+            cout << "No complaints to service." << endl;
+            return;
+        }
+
+        Complaint top = heap[0];
+        cout << "Complaint has been processed:" << endl;
+        cout << "Complaint ID  : " << top.complaintID << endl;
+        cout << "User ID       : " << top.userId << endl;
+        cout << "User Type     : " << top.userType << endl;
+        cout << "Complaint Text: " << top.complaintText << endl;
+
+        heap[0] = heap.back();
+        heap.pop_back();
+        heapifyDown(0);
+    }
+
+    void increasePriority(int index) {
+        if (index < 0 || index >= heap.size()) return;
+        heap[index].userType = "Platinum";
+        heapifyUp(index);
+    }
+
+    void displayUserComplaints(int userId) {
+        NonGroupAvlNode* current = Root;
+
+        // Search for the userId in the AVL tree
+        while (current != nullptr) {
+            if (userId < current->userData)
+                current = current->left;
+            else if (userId > current->userData)
+                current = current->right;
+            else
+                break;
+        }
+
+        if (current == nullptr || current->pointerTOUser == nullptr || current->pointerTOUser->userData == nullptr) {
+            cout << "User with ID " << userId << " not found.\n";
+            return;
+        }
+
+        cout << "Complaints for User: " << current->pointerTOUser->userData->name
+            << " (ID: " << current->pointerTOUser->userData->userId << ")\n";
+
+        if (current->pointerTOUser->userData->complaints.empty()) {
+            cout << "No complaints found for this user.\n";
+            return;
+        }
+
+        for (auto complaint : current->pointerTOUser->userData->complaints) {
+            cout << "Complaint ID : " << complaint.complaintID << "\n";
+            cout << "Text         : " << complaint.complaintText << "\n";
+            cout << "-------------------------------\n";
+        }
+    }
+
+    avlNode* searchCountry(avlNode* node, string country) {
+        if (!node) return nullptr;
+        if (country == node->userData) return node;
+        else if (country < node->userData) return searchCountry(node->left, country);
+        else return searchCountry(node->right, country);
+    }
+
+    void displayComplaintsByCountry(string country) {
+        avlNode* countryNode = searchCountry(root, country);
+
+        if (!countryNode) {
+            cout << "No such country found in group index.\n";
+            return;
+        }
+
+        sllNode* current = countryNode->Head;
+        bool anyComplaint = false;
+
+        while (current != nullptr) {
+            user* currentUser = current->pointerToUser->userData;
+
+            if (!currentUser->complaints.empty()) {
+                cout << "User ID: " << currentUser->userId << ", Name: " << currentUser->name << endl;
+                for (auto complaint : currentUser->complaints) {
+                    cout << "\tComplaint ID: " << complaint.complaintID << endl;
+                    cout << "\tComplaint Text: " << complaint.complaintText << endl;
+                }
+                anyComplaint = true;
+            }
+
+            current = current->Next;
+        }
+
+        if (!anyComplaint) {
+            cout << "No complaints registered by users of " << country << ".\n";
+        }
+    }
+
+    dllNode* searchUserById(int userId) {
+        NonGroupAvlNode* current = Root;
+
+        while (current != nullptr) {
+            if (current->userData == userId) {
+                return current->pointerTOUser;
+            }
+            else if (userId < current->userData) {
+                current = current->left;
+            }
+            else {
+                current = current->right;
+            }
+        }
+        return nullptr;
+    }
+
+    int height(avlNode* node) {
+        return node ? node->height : 0;
+    }
+
+    int balance(avlNode* node) {
+        return node ? height(node->right) - height(node->left) : 0;
+    }
+
+    avlNode* rightRotate(avlNode* y) {
+        if (!y || !y->left) {
+            return y;
+        }
+
+        avlNode* x = y->left;
+        avlNode* T2 = x->right;
+
+        x->right = y;
+        y->left = T2;
+
+        y->height = max(height(y->left), height(y->right)) + 1;
+        x->height = max(height(x->left), height(x->right)) + 1;
+
+        return x;
+    }
+
+    avlNode* leftRotate(avlNode* x) {
+        if (!x || !x->right) {
+            return x;
+        }
+
+        avlNode* y = x->right;
+        avlNode* T2 = y->left;
+
+        y->left = x;
+        x->right = T2;
+
+        x->height = max(height(x->left), height(x->right)) + 1;
+        y->height = max(height(y->left), height(y->right)) + 1;
+
+        return y;
+    }
+
+    int height(NonGroupAvlNode* node) {
+        return node ? node->height : 0;
+    }
+
+    int balance(NonGroupAvlNode* node) {
+        return node ? height(node->right) - height(node->left) : 0;
+    }
+
+    NonGroupAvlNode* rightRotate(NonGroupAvlNode* y) {
+        if (!y || !y->left) return y;
+
+        NonGroupAvlNode* x = y->left;
+        NonGroupAvlNode* T2 = x->right;
+
+        // Rotation
+        x->right = y;
+        y->left = T2;
+
+        // Update heights
+        y->height = max(height(y->left), height(y->right)) + 1;
+        x->height = max(height(x->left), height(x->right)) + 1;
+
+        return x;
+    }
+
+    NonGroupAvlNode* leftRotate(NonGroupAvlNode* x) {
+        if (!x || !x->right) return x;
+
+        NonGroupAvlNode* y = x->right;
+        NonGroupAvlNode* T2 = y->left;
+
+        // Rotation
+        y->left = x;
+        x->right = T2;
+
+        // Update heights
+        x->height = max(height(x->left), height(x->right)) + 1;
+        y->height = max(height(y->left), height(y->right)) + 1;
+
+        return y;
+    }
+
+    NonGroupAvlNode* GetParent(NonGroupAvlNode* curr, U data) {
+        if (curr == nullptr || (curr->left == nullptr && curr->right == nullptr))
+            return nullptr;
+
+        if ((curr->left != nullptr && curr->left->userData == data) ||
+            (curr->right != nullptr && curr->right->userData == data))
+            return curr;
+
+        if (data < curr->userData)
+            return GetParent(curr->left, data);
+        else
+            return GetParent(curr->right, data);
+    }
+
+    void insertNonGroup(user* obj) {
+        bool check = false;
+        dllNode* Nnode = nullptr;
+        NonGroupAvlNode* parent = nullptr;
+        NonGroupAvlNode* AVLNnode = nullptr;
+        Root = insertNonGroup(Root, obj, check, parent, Nnode,AVLNnode);
+        insertIntoDLL(obj, parent, Nnode);
+        root = insertGroup(root, obj, Nnode, AVLNnode);
+    }
+
+    NonGroupAvlNode* insertNonGroup(NonGroupAvlNode* node, user* obj, bool& flag, NonGroupAvlNode*& parent, dllNode*& DLLNode, NonGroupAvlNode*& AVLnnode) {
+        if (!node) {
+            NonGroupAvlNode* nnode = new NonGroupAvlNode(obj->userId);
+            AVLnnode = nnode;    
+            dllNode* newDllNode = new dllNode(obj);
+            DLLNode = newDllNode;
+            if (head == nullptr) {
+                head = tail = newDllNode;
+            }
+            nnode->pointerTOUser = newDllNode;
+            return nnode;
+        }
+
+        if (obj->userId < node->userData) {
+            node->left = insertNonGroup(node->left, obj, flag, parent, DLLNode, AVLnnode);
+        }
+        else if (obj->userId > node->userData) {
+            node->right = insertNonGroup(node->right, obj, flag, parent, DLLNode, AVLnnode);
+        }
+        else {
+            return node;
+        }
+
+        node->height = 1 + max(height(node->left), height(node->right));
+        int bf = balance(node);
+
+        if (bf > 1 && obj->userId < node->right->userData) return leftRotate(node);
+        if (bf < -1 && obj->userId > node->left->userData) return rightRotate(node);
+        if (bf > 1 && obj->userId > node->right->userData) {
+            node->right = rightRotate(node->right);
+            return leftRotate(node);
+        }
+        if (bf < -1 && obj->userId < node->left->userData) {
+            node->left = leftRotate(node->left);
+            return rightRotate(node);
+        }
+
+        if (!flag) {
+            parent = GetParent(Root, obj->userId);
+            flag = true;
+        }
+
+        return node;
+    }
+
+    void search(int userId) {
+        NonGroupAvlNode* node = Root;
+        while (node && node->pointerTOUser->userData->userId != userId) {
+            if (node->pointerTOUser->userData->userId > userId)
+                node = node->left;
+            else
+                node = node->right;
+        }
+
+        if (node) {
+            cout << "User found:\n";
+            cout << "ID: " << node->pointerTOUser->userData->userId << endl;
+            cout << "Name: " << node->pointerTOUser->userData->name << endl;
+            cout << "Country: " << node->pointerTOUser->userData->country << endl;
+            cout << "email: " << node->pointerTOUser->userData->email << endl;
+            cout << "type: " << node->pointerTOUser->userData->type << endl;
+        }
+        else {
+            cout << "User with ID " << userId << " not found.\n";
+        }
+    }
+
+    NonGroupAvlNode* minValueNode(NonGroupAvlNode* node) {
+        NonGroupAvlNode* current = node;
+        while (current && current->left != nullptr) {
+            current = current->left;
+        }
+        return current;
+    }
+
+    NonGroupAvlNode* deleteNode(NonGroupAvlNode* root, int userId) {
+        if (root == nullptr) return root;
+
+        if (userId < root->pointerTOUser->userData->userId)
+            root->left = deleteNode(root->left, userId);
+        else if (userId > root->pointerTOUser->userData->userId)
+            root->right = deleteNode(root->right, userId);
+        else {
+            if ((root->left == nullptr) || (root->right == nullptr)) {
+                NonGroupAvlNode* temp = root->left ? root->left : root->right;
+
+                // Case: No child (leaf)
+                if (temp == nullptr) {
+                    // Proper DLL node deletion
+                    if (root->pointerTOUser->prev)
+                        root->pointerTOUser->prev->next = root->pointerTOUser->next;
+                    else
+                        head = root->pointerTOUser->next;
+
+                    if (root->pointerTOUser->next)
+                        root->pointerTOUser->next->prev = root->pointerTOUser->prev;
+                    else
+                        tail = root->pointerTOUser->prev;
+
+                    delete root->pointerTOUser; // Deleting the DLL node
+                    delete root; // Delete AVL node
+                    return nullptr;
+                }
+
+                else {
+                    // Case: One child
+
+                    // Step 1: Copy child’s user data into root's DLL node
+                    *(root->pointerTOUser->userData) = *(temp->pointerTOUser->userData);
+
+                    // Step 2: Manage DLL of temp's pointerTOUser (remove temp's DLL node)
+                    if (temp->pointerTOUser->prev)
+                        temp->pointerTOUser->prev->next = temp->pointerTOUser->next;
+                    else
+                        head = temp->pointerTOUser->next;
+
+                    if (temp->pointerTOUser->next)
+                        temp->pointerTOUser->next->prev = temp->pointerTOUser->prev;
+                    else
+                        tail = temp->pointerTOUser->prev;
+
+                    // Step 3: Delete temp’s DLL node (we kept root's DLL node intact)
+                    delete temp->pointerTOUser;
+
+                    // Step 4: Move AVL links to root
+                    root->left = temp->left;
+                    root->right = temp->right;
+                    root->height = temp->height;
+
+                    delete temp;  // Delete the temp AVL node
+
+                    return root;
+                }
+
+            }
+            else {
+                NonGroupAvlNode* temp = minValueNode(root->right);
+
+                *(root->pointerTOUser->userData) = *(temp->pointerTOUser->userData);  // Copy data only
+                // Do NOT reassign pointerTOUser
+                root->right = deleteNode(root->right, temp->pointerTOUser->userData->userId);  // delete 103 separately
+            }
+        }
+
+        if (root == nullptr)
+            return root;
+
+        root->height = 1 + max(height(root->left), height(root->right));
+        int bf = balance(root);
+
+        if (bf > 1 && balance(root->left) >= 0)
+            return rightRotate(root);
+
+        if (bf > 1 && balance(root->left) < 0) {
+            root->left = leftRotate(root->left);
+            return rightRotate(root);
+        }
+
+        if (bf < -1 && balance(root->right) <= 0)
+            return leftRotate(root);
+
+        if (bf < -1 && balance(root->right) > 0) {
+            root->right = rightRotate(root->right);
+            return leftRotate(root);
+        }
+
+        return root;
+    }
+
+    void deleteUser(int userId) {
+        Root = deleteNode(Root, userId);
+        cout << "User with ID " << userId << " has been deleted." << endl;
+    }
+
+    void insertIntoDLL(user* newUser, NonGroupAvlNode* parent, dllNode* newDllNode) {
+        if (!parent) return;
+
+        dllNode* parentUserNode = parent->pointerTOUser;
+
+        // Case 1: New node is smaller than parent node => insert BEFORE parent
+        if (newUser->userId < parentUserNode->userData->userId) {
+            if (parentUserNode == head) {
+                // Insert at head
+                newDllNode->next = head;
+                newDllNode->prev = nullptr;
+                head->prev = newDllNode;
+                head = newDllNode;
+            }
+            else {
+                // Insert before a middle node
+                newDllNode->next = parentUserNode;
+                newDllNode->prev = parentUserNode->prev;
+                if (parentUserNode->prev) {
+                    parentUserNode->prev->next = newDllNode;
+                }
+                parentUserNode->prev = newDllNode;
+            }
+        }
+        // Case 2: New node is greater than or equal to parent node => insert AFTER parent
+        else {
+            if (parentUserNode == tail) {
+                // Insert at tail
+                newDllNode->prev = tail;
+                newDllNode->next = nullptr;
+                tail->next = newDllNode;
+                tail = newDllNode;
+            }
+            else {
+                // Insert after a middle node
+                newDllNode->prev = parentUserNode;
+                newDllNode->next = parentUserNode->next;
+                if (parentUserNode->next) {
+                    parentUserNode->next->prev = newDllNode;
+                }
+                parentUserNode->next = newDllNode;
+            }
+        }
+    }
+
+    avlNode* insertGroup(avlNode* node, user* obj, dllNode* Nnode,NonGroupAvlNode* AVLnnode) {
+        if (!node) {
+            avlNode* newNode = new avlNode(obj->country);
+
+            sllNode* newSll = new sllNode(obj->userId, Nnode);
+            newSll->pointerToUserAVL = AVLnnode;
+            newNode->Head = newNode->Tail = newSll;
+
+            return newNode;
+        }
+
+        if (obj->country < node->userData) {
+            node->left = insertGroup(node->left, obj, Nnode, AVLnnode);
+        }
+        else if (obj->country > node->userData) {
+            node->right = insertGroup(node->right, obj, Nnode, AVLnnode);
+        }
+        else {
+            sllNode* newSll = new sllNode(obj->userId, Nnode);
+            newSll->pointerToUserAVL = AVLnnode;  
+            if (node->Tail) {
+                node->Tail->Next = newSll;
+                node->Tail = newSll;
+            }
+            else {
+                node->Head = node->Tail = newSll;
+            }
+
+            return node;
+        }
+
+
+        node->height = 1 + max(height(node->left), height(node->right));
+        int bf = balance(node);
+
+        if (bf < -1 && node->right && obj->country > node->right->userData)
+            return leftRotate(node);
+
+        if (bf > 1 && node->left && obj->country < node->left->userData)
+            return rightRotate(node);
+
+        if (bf > 1 && node->left && obj->country > node->left->userData) {
+            // Left-Right case: Perform left rotation on left child, then right rotation on current node
+            node->left = leftRotate(node->left);
+            return rightRotate(node);
+        }
+
+        if (bf < -1 && node->right && obj->country < node->right->userData) {
+            // Right-Left case: Perform right rotation on right child, then left rotation on current node
+            node->right = rightRotate(node->right);
+            return leftRotate(node);
+        }
+
+
+        return node;
+    }
+
+    void printUsersDLL() {
+        if (!head) {
+            cout << "Doubly Linked List is empty." << endl;
+            return;
+        }
+
+        cout << "Users in Doubly Linked List (in order by userId):\n";
+        dllNode* temp = head;
+        while (temp) {
+            cout << "UserID: " << temp->userData->userId
+                << ", Name: " << temp->userData->name
+                << ", Email: " << temp->userData->email
+                << ", Country: " << temp->userData->country
+                << ", Type: " << temp->userData->type
+                << endl;
+            temp = temp->next;
+        }
+    }
+
+    void print() {
+        printUsers(Root);
+    }
+
+    void printUsers(NonGroupAvlNode* node) {
+        if (node == nullptr) {
+            return;
+        }
+
+        printUsers(node->left);
+
+        if (node->pointerTOUser && node->pointerTOUser->userData) {
+            cout << "UserID: " << node->pointerTOUser->userData->userId
+                << ", Name: " << node->pointerTOUser->userData->name
+                << ", Email: " << node->pointerTOUser->userData->email
+                << ", Country: " << node->pointerTOUser->userData->country
+                << ", Type: " << node->pointerTOUser->userData->type
+                << endl;
+        }
+
+        printUsers(node->right);
+    }
+
+    avlNode* deleteNode(avlNode* node, const string& country) {
+        if (!node) return nullptr;
+
+        if (country < node->userData) {
+            node->left = deleteNode(node->left, country);
+        }
+        else if (country > node->userData) {
+            node->right = deleteNode(node->right, country);
+        }
+        else {
+            sllNode* curr = node->Head;
+            while (curr) {
+                sllNode* next = curr->Next;
+                Root = deleteNode(Root, curr->userId);
+                delete curr; 
+                curr = next;
+            }
+            node->Head = node->Tail = nullptr;
+
+            // --- Delete this AVL node (0 or 1 child case)
+            if (!node->left || !node->right) {
+                avlNode* child = node->left ? node->left : node->right;
+                delete node;
+                return child;
+            }
+
+            // --- Node with 2 children
+            avlNode* succParent = node;
+            avlNode* succ = node->right;
+            while (succ->left) {
+                succParent = succ;
+                succ = succ->left;
+            }
+
+            node->userData = succ->userData;
+            node->Head = succ->Head;
+            node->Tail = succ->Tail;
+            succ->Head = succ->Tail = nullptr;
+
+            node->right = deleteNode(node->right, succ->userData);
+        }
+
+        // --- Rebalance
+        node->height = 1 + max(height(node->left), height(node->right));
+        int bf = balance(node);
+
+        if (bf > 1 && balance(node->right) >= 0) return leftRotate(node);
+        if (bf < -1 && balance(node->left) <= 0) return rightRotate(node);
+        if (bf > 1 && balance(node->right) < 0) {
+            node->right = rightRotate(node->right);
+            return leftRotate(node);
+        }
+        if (bf < -1 && balance(node->left) > 0) {
+            node->left = leftRotate(node->left);
+            return rightRotate(node);
+        }
+
+        return node;
+    }
+
+    void deleteGroup(const string& country) {
+        root = deleteNode(root, country);
+    }
+
+    avlNode* searchByCountry(avlNode* node, const string& country) {
+        if (node == nullptr || node->userData == country) {
+            return node;
+        }
+        if (country < node->userData) {
+            return searchByCountry(node->left, country);
+        }
+        else {
+            return searchByCountry(node->right, country);
+        }
+    }
+
+    void listUsersByCountry(const string& country) {
+        avlNode* node = searchByCountry(root, country);
+        if (!node) {
+            cout << "No users found for country: " << country << endl;
+            return;
+        }
+
+        sllNode* current = node->Head;
+        cout << "Users from " << country << ":" << endl;
+
+        while (current) {
+            cout << "User ID: " << current->pointerToUser->userData->userId << endl;
+            cout << "Name: " << current->pointerToUser->userData->name << endl;
+            cout << "Email: " << current->pointerToUser->userData->email << endl;
+            cout << "--------------------------" << endl;
+
+            current = current->Next;
+        }
+    }
+
+    void displayGroupIndices() {
+        displayGroupIndices(root);
+    }
+
+    void displayGroupIndices(avlNode* node) {
+        if (!node) return;
+
+        displayGroupIndices(node->left);
+        int count = 0;
+        sllNode* current = node->Head;
+        while (current) {
+            count++;
+            current = current->Next;
+        }
+        cout << "Country: " << node->userData << " | Users: " << count << endl;
+
+        displayGroupIndices(node->right);
+    }
+};
+
+int main() {
+    userListANDavlTree<string, int> myTree;
+
+    user* u1 = new user(101, "Shrek", "swamp@dreamworks.com", "USA", "Platinum");
+    user* u2 = new user(102, "Marwa", "marwa@laughs.com", "USA", "Silver");
+    user* u3 = new user(103, "Gru", "gru@minions.com", "Germany", "Platinum");
+    user* u4 = new user(104, "Vector", "vector@space.com", "Germany", "Bronze");
+    user* u5 = new user(105, "Javeria", "bean@uk.com", "UK", "Gold");
+    user* u6 = new user(106, "James Bond", "007@uk.gov", "UK", "Platinum");
+    user* u7 = new user(107, "Ali", "ali@pakistan.pk", "Pakistan", "Silver");
+    user* u8 = new user(108, "Fawad", "fawad@pakistan.pk", "Pakistan", "Bronze");
+    user* u9 = new user(109, "Fasih", "clue@france.fr", "France", "Silver");
+    user* u10 = new user(110, "Remy", "chef@ratatouille.fr", "France", "Gold");
+    user* u11 = new user(111, "Dwight Schrute", "beets@dundermifflin.com", "USA", "Gold");
+    user* u12 = new user(112, "Michael Scott", "worldsbestboss@usa.com", "USA", "Platinum");
+
+    myTree.insertNonGroup(u1);
+    myTree.insertNonGroup(u2);
+    myTree.insertNonGroup(u3);
+    myTree.insertNonGroup(u4);
+    myTree.insertNonGroup(u5);
+    myTree.insertNonGroup(u6);
+    myTree.insertNonGroup(u7);
+    myTree.insertNonGroup(u8);
+    myTree.insertNonGroup(u9);
+    myTree.insertNonGroup(u10);
+    myTree.insertNonGroup(u11);
+    myTree.insertNonGroup(u12);
+
+    int choice;
+    while (true) {
+        system("cls");
+        cout << "==== User Management Menu ====" << endl;
+        cout << "1. Display All Users (DLL)" << endl;
+        cout << "2. Display All Users (AVL)" << endl;
+        cout << "3. Search for a User by ID" << endl;
+        cout << "4. Delete a User by ID" << endl;
+        cout << "5. Display All Group Indices" << endl;
+        cout << "6. Display Group by Country" << endl;
+        cout << "7. Delete Group by Country" << endl;
+        cout << "8. Register a Complaint" << endl;
+        cout << "9. Service Complaint" << endl;
+        cout << "10. Increase Complaint Priority" << endl;
+        cout << "11. Display Complaints by User ID" << endl;
+        cout << "12. Display Complaints by Country" << endl;
+        cout << "13. Display All Complaints" << endl;
+        cout << "0. Exit" << endl;
+        cout << "Enter your choice: ";
+
+        cin >> choice;
+        int currentComplaintID = 1;
+
+        switch (choice) {
+        case 1:
+            myTree.printUsersDLL();
+            break;
+        case 2:
+            myTree.print();
+            break;
+        case 3: {
+            int id;
+            cout << "Enter User ID to search: ";
+            cin >> id;
+            myTree.search(id);
+            break;
+        }
+        case 4: {
+            int id;
+            cout << "Enter User ID to delete: ";
+            cin >> id;
+            myTree.deleteUser(id);
+            break;
+        }
+        case 5:
+            myTree.displayGroupIndices();
+            break;
+        case 6: {
+            string country;
+            cout << "Enter Country to list users: ";
+            cin >> country;
+            myTree.listUsersByCountry(country);
+            break;
+        }
+        case 7: {
+            string country;
+            cout << "Enter Country to delete group: ";
+            cin >> country;
+            myTree.deleteGroup(country);
+            break;
+        }
+        case 8: {
+            int userId;
+            string text;
+            cout << "Enter User ID: ";
+            cin >> userId;
+            cin.ignore();
+            cout << "Enter Complaint Text: ";
+            getline(cin, text);
+
+            myTree.registerComplaintPublic(currentComplaintID++, text, userId);
+            break;
+        }
+        case 9:
+            myTree.serviceComplaint();
+            break;
+        case 10: {
+            int index;
+            cout << "Enter Index to increase priority: ";
+            cin >> index;
+            myTree.increasePriority(index);
+            break;
+        }
+        case 11: {
+            int userId;
+            cout << "Enter User ID: ";
+            cin >> userId;
+            myTree.displayUserComplaints(userId);
+            break;
+        }
+        case 12: {
+            string country;
+            cout << "Enter Country Name: ";
+            cin >> country;
+            myTree.displayComplaintsByCountry(country);
+            break;
+        }
+        case 13: {
+            myTree.printHeap();
+            break;
+        }
+        case 0:
+            cout << "Exiting the program." << endl;
+            return 0;
+        default:
+            cout << "Invalid choice. Try again." << endl;
+        }
+
+        cout << endl << "Press any key to continue...";
+        cin.ignore();
+        cin.get();
+    }
+}
