@@ -1,7 +1,7 @@
 #include<iostream>
 #include<list>
 #include<vector>
-#include <cstdlib>  // For system("cls") and system("clear")
+#include <cstdlib>  // for system("cls") and system("clear")
 #include <string>
 using namespace std;
 
