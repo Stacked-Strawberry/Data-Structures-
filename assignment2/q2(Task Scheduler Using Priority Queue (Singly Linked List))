@@ -1,0 +1,132 @@
+#include <iostream>
+#include <chrono>  // used for seconds()
+#include <thread>  // used for this_thread_sleep_for()
+using namespace std;
+using namespace chrono;
+using namespace this_thread;
+
+class TaskList {
+private:
+    class Node {
+    public:
+        string name;
+        int priority;
+        int duration;
+        Node* next;
+
+        Node(string n, int p, int d) : name(n), priority(p), duration(d), next(nullptr) {}
+    };
+
+    Node* head;
+
+public:
+    TaskList() : head(nullptr) {}
+
+    void insert(string taskName, int priority, int duration) {
+        Node* newNode = new Node(taskName, priority, duration);
+
+        if (!head || newNode->priority < head->priority) {
+            newNode->next = head;
+            head = newNode;
+            return;
+        }
+
+        Node* current = head;
+        while (current->next && current->next->priority <= newNode->priority) {
+            current = current->next;
+        }
+
+        newNode->next = current->next;
+        current->next = newNode;
+    }
+
+
+    Node* getHead() {
+        return head;
+    }
+
+    void remove(Node* current) {
+        if (!head || !current) return;
+
+        if (head == current) {
+            head = head->next;
+            delete current;
+            return;
+        }
+
+        Node* temp = head;
+        while (temp->next && temp->next != current) {
+            temp = temp->next;
+        }
+
+        if (temp->next == current) {
+            temp->next = current->next;
+            delete current;
+        }
+    }
+
+    friend void scheduler(TaskList& taskList);
+};
+
+void scheduler(TaskList& taskList) {
+    int totalExecutionTime = 0;
+
+    while (taskList.getHead()) {
+        TaskList::Node* current = taskList.getHead();
+        int executionTime = min(5, current->duration);
+
+        cout << "Executing Task: " << current->name << " for " << executionTime << " seconds." << endl;
+
+        sleep_for(seconds(executionTime));
+
+        totalExecutionTime += executionTime;
+
+        string name = current->name;
+        int priority = current->priority;
+        int remainingDuration = current->duration - executionTime;
+
+        taskList.remove(current);
+
+        if (remainingDuration > 0) {
+            priority += 2;
+            taskList.insert(name, priority, remainingDuration);
+        }
+    }
+
+    cout << "All tasks completed. Total execution time: " << totalExecutionTime << " seconds." << endl;
+}
+
+
+int main() {
+    TaskList taskList;
+    taskList.insert("A", 1, 6);
+    taskList.insert("B", 2, 4);
+    taskList.insert("C", 1, 9);
+    taskList.insert("D", 3, 5);
+    taskList.insert("E", 1, 8);
+
+    thread schedulerThread(scheduler, ref(taskList));
+
+    while (taskList.getHead()) {
+        sleep_for(seconds(1));
+        cout << "\n--------------------------\n";
+
+        char choice;
+        cout << "Do you want to add a new task? (y/n): ";
+        cin >> choice;
+
+        if (choice == 'y' || choice == 'Y') {
+            string name;
+            int priority, duration;
+            cout << "Enter task name: ";
+            cin >> name;
+            cout << "Enter priority (1 is highest): ";
+            cin >> priority;
+            cout << "Enter duration (seconds): ";
+            cin >> duration;
+            taskList.insert(name, priority, duration);
+        }
+    }
+    schedulerThread.join();
+    cout << "All tasks completed. Exiting program..." << endl;
+}
