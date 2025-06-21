@@ -1,0 +1,92 @@
+//Shortest Path in Maze using BFS
+
+#include <iostream>
+#include <vector>
+#include <queue>
+
+using namespace std;
+
+struct Node {
+    int x, y;
+};
+
+vector<vector<int>> findShortestPath(vector<vector<int>>& maze) {
+    int n = maze.size();
+    if (maze[0][0] == 0 || maze[n - 1][n - 1] == 0) return {};
+
+    queue<Node> q;
+    vector<vector<int>> visited(n, vector<int>(n, 0));
+    vector<vector<Node>> parent(n, vector<Node>(n, { -1, -1 }));
+    vector<vector<int>> path(n, vector<int>(n, 0));
+
+    q.push({ 0, 0 });
+    visited[0][0] = 1;
+
+    while (!q.empty()) {
+        Node current = q.front();
+        q.pop();
+        int x = current.x, y = current.y;
+        if (x == n - 1 && y == n - 1) break;
+
+
+        if (x + 1 < n && maze[x + 1][y] == 1 && visited[x + 1][y] == 0) {
+            visited[x + 1][y] = 1;
+            parent[x + 1][y] = { x, y };
+            q.push({ x + 1, y });
+        }
+
+        if (y + 1 < n && maze[x][y + 1] == 1 && visited[x][y + 1] == 0) {
+            visited[x][y + 1] = 1;
+            parent[x][y + 1] = { x, y };
+            q.push({ x, y + 1 });
+        }
+
+        if (x - 1 >= 0 && maze[x - 1][y] == 1 && visited[x - 1][y] == 0) {
+            visited[x - 1][y] = 1;
+            parent[x - 1][y] = { x, y };
+            q.push({ x - 1, y });
+        }
+
+        if (y - 1 >= 0 && maze[x][y - 1] == 1 && visited[x][y - 1] == 0) {
+            visited[x][y - 1] = 1;
+            parent[x][y - 1] = { x, y };
+            q.push({ x, y - 1 });
+        }
+    }
+
+    if (parent[n - 1][n - 1].x == -1) return {};
+
+    int x = n - 1, y = n - 1;
+    while (x != -1 && y != -1) {
+        path[x][y] = 1;
+        Node prev = parent[x][y];
+        x = prev.x;
+        y = prev.y;
+    }
+
+    return path;
+}
+
+int main() {
+    vector<vector<int>> maze = {
+        {1, 0, 0, 0},
+        {1, 1, 0, 1},
+        {0, 1, 0, 0},
+        {1, 1, 1, 1}
+    };
+
+    vector<vector<int>> result = findShortestPath(maze);
+
+    if (!result.empty()) {
+        cout << "Shortest Path Found:"<<endl;
+        for (auto row : result) {
+            for (auto cell : row) {
+                cout << cell << " ";
+            }
+            cout << endl;
+        }
+    }
+    else {
+        cout << "No path found."<<endl;
+    }
+}
